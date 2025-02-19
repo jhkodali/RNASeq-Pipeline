@@ -1,6 +1,6 @@
 #!/usr/bin/env nextflow
 
-process FASTQC {
+process FAST_QC {
 
     container "ghcr.io/bf528/fastqc:latest"
     label "process_single"
