@@ -2,6 +2,7 @@
 
 include { FAST_QC } from './modules/fastqc'
 include { STAR_INDEX } from './modules/star_index'
+include { PARSE_GTF } from './modules/parse_gtf'
 
 workflow {
 
@@ -13,4 +14,5 @@ workflow {
 
     FAST_QC(fastqc_ch)
     STAR_INDEX(params.genome, params.gtf)
+    PARSE_GTF(params.gtf)
 }
