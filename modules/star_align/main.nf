@@ -10,10 +10,11 @@ process STAR_ALIGN {
     path reads
 
     output:
-    path "", emit: 
+    path "*.bam", emit: bam_file
+    path "*.Log.final.out", emit: log_file
 
     shell:
     """
-    STAR --runThreadN $task.cpus --genomeDir star --readFilesIn, --readFilesCommand, --outFileNamePrefix, --outSAMtype
+    STAR --runThreadN $task.cpus --genomeDir $genomeDir --readFilesIn $reads --readFilesCommand zcat --outFileNamePrefix "aligned" --outSAMtype BAM SortedByCoordinate
     """
 }
