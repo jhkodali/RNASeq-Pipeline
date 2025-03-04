@@ -7,10 +7,10 @@ process PARSE_GTF {
     cache 'lenient'
 
     input:
-    tuple val(name), path(gtf)
+    path(gtf)
 
     output:
-    tuple val(name), path("*.txt")
+    path("*.txt")
 
     script:
     """

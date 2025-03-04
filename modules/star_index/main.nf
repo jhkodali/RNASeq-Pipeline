@@ -3,7 +3,7 @@
 
 process STAR_INDEX {
 
-    container "ghcr.io/bf428/star:latest"
+    container "ghcr.io/bf528/star:latest"
     label "process_high"
 
     input:
@@ -11,7 +11,7 @@ process STAR_INDEX {
     path gtf
 
     output:
-    path "star", emit: STAR_INDEX
+    path "star", emit: index
     
     shell:
     """

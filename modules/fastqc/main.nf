@@ -10,7 +10,7 @@ process FAST_QC {
     tuple val(name), path(fastqc)
 
     output:
-    path("*html")
+    path("*.zip")
 
     shell:
     """
