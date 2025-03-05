@@ -6,6 +6,7 @@ include { PARSE_GTF } from './modules/parse_gtf'
 include { STAR_ALIGN } from './modules/star_align'
 include { MULTIQC } from './modules/multiqc'
 
+
 workflow {
 
     Channel.fromFilePairs(params.reads)
@@ -29,6 +30,7 @@ workflow {
     | set { multiqc_ch }
 
     MULTIQC(multiqc_ch)
+    
     
 
 }
