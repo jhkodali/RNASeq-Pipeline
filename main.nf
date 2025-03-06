@@ -20,14 +20,16 @@ workflow {
     PARSE_GTF(params.gtf)
     STAR_ALIGN(align_ch, STAR_INDEX.out.index)
 
-    FAST_QC.out.map{ it[1] }.collect()
+
+    FAST_QC.out.map{ it[8] }.collect()
     | set { fastqc_out }
 
-    STAR_ALIGN.out.log.map{ it[1] }.collect()
+    STAR_ALIGN.out.log.map{ it[8] }.collect()
     | set { star_log }
 
     fastqc_out.mix(star_log).flatten().collect()
     | set { multiqc_ch }
+
 
     MULTIQC(multiqc_ch)
     

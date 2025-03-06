@@ -14,6 +14,7 @@ process MULTIQC {
 
     shell:
     """
+
     multiqc . -f
     """
 
