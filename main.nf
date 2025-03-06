@@ -21,10 +21,16 @@ workflow {
     STAR_ALIGN(align_ch, STAR_INDEX.out.index)
 
 
-    FAST_QC.out.map{ it[8] }.collect()
+    //FAST_QC.out.map{ it[8] }.collect()
+    //| set { fastqc_out }
+
+    FAST_QC.out.collect()
     | set { fastqc_out }
 
-    STAR_ALIGN.out.log.map{ it[8] }.collect()
+    //STAR_ALIGN.out.log.map{ it[8] }.collect()
+    //| set { star_log }
+
+    STAR_ALIGN.out.log.collect()
     | set { star_log }
 
     fastqc_out.mix(star_log).flatten().collect()
