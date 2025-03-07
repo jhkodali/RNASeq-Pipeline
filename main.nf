@@ -5,7 +5,8 @@ include { STAR_INDEX } from './modules/star_index'
 include { PARSE_GTF } from './modules/parse_gtf'
 include { STAR_ALIGN } from './modules/star_align'
 include { MULTIQC } from './modules/multiqc'
-
+include { VERSE } from './modules/verse'
+//include { CONCAT } from './modules/concat'
 
 workflow {
 
@@ -20,15 +21,8 @@ workflow {
     PARSE_GTF(params.gtf)
     STAR_ALIGN(align_ch, STAR_INDEX.out.index)
 
-
-    //FAST_QC.out.map{ it[8] }.collect()
-    //| set { fastqc_out }
-
     FAST_QC.out.collect()
     | set { fastqc_out }
-
-    //STAR_ALIGN.out.log.map{ it[8] }.collect()
-    //| set { star_log }
 
     STAR_ALIGN.out.log.collect()
     | set { star_log }
@@ -36,9 +30,18 @@ workflow {
     fastqc_out.mix(star_log).flatten().collect()
     | set { multiqc_ch }
 
-
     MULTIQC(multiqc_ch)
+
+    STAR_ALIGN.out.bam.collect()
+    | set { test }
+
+    VERSE(STAR_ALIGN.out.bam, params.gtf)
+    VERSE.out.counts.map{ it[1] }.collect()
+    | set {concat_ch}
+
+    //CONCAT(concat_ch)*/
     
+
     
 
 }
