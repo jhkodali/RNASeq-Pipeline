@@ -32,12 +32,12 @@ workflow {
 
     MULTIQC(multiqc_ch)
 
-    STAR_ALIGN.out.bam.collect()
-    | set { test }
-
     VERSE(STAR_ALIGN.out.bam, params.gtf)
-    VERSE.out.counts.map{ it[1] }.collect()
+
+    VERSE.out.counts.collect()
     | set {concat_ch}
+
+    concat_ch.view()
 
     //CONCAT(concat_ch)*/
     

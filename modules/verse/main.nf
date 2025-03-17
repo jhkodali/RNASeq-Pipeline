@@ -11,11 +11,11 @@ process VERSE {
     path(gtf)
 
     output:
-    path("*exon.txt"), emit: counts
+    path("${bam.baseName}.exon.txt"), emit: counts
     
     shell:
     """
-    verse -S -a $gtf -o $bam
+    verse -S -a $gtf -o $bam.baseName $bam                                                                                                                                                                  
     """
 
 }
