@@ -14,13 +14,16 @@ parser.add_argument("-o", "--output", help='output file to save counts matrix in
 # runs the parser and input the data into the namespace object
 args = parser.parse_args()
 
-# read files
-data_frames = [pd.read_csv(file, sep="\t", header = None) for file in args.input]
+data_frames = []
+# naming each count column by sample name
+for file in args.input:
+    # extract sample name by slicing file and removing extensions
+    sample_name = file.split("/")[-1].replace(".Aligned.out.exon.txt", "") 
+    df = pd.read_csv(file, sep="\t").rename(columns={"count": sample_name}) 
+    df.set_index("gene", inplace = True)
+    data_frames.append(df)
 
-# concatanate dataframes
-combined_df = pd.concat(data_frames, ignore_index = True)
+combined_df = pd.concat(data_frames, axis = 1)
+combined_df.reset_index(inplace = True)
 
-# generate counts matrix 
-#counts_matrix = combined_df.apply(pd.Series.value_counts, axis = 0).fillna(0)
-
-combined_df.to_csv(args.output)
+combined_df.to_csv(args.output, index = False)

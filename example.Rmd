@@ -1,6 +1,6 @@
 --- 
 title: Project 1
-subtitle: Week 3
+subtitle: Week 3 (on example counts)
 output: html_document
 ---
 
