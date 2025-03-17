@@ -7,14 +7,14 @@ process CONCAT {
     cache 'lenient'
 
     input:
-    // verse output
+    path(txt)
 
     output:
-    // counts matrix
+    path("*.csv")
 
     script:
     """
-    
+    concat.py -i $txt -o counts.csv
     """
 
 }

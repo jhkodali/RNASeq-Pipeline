@@ -6,7 +6,7 @@ include { PARSE_GTF } from './modules/parse_gtf'
 include { STAR_ALIGN } from './modules/star_align'
 include { MULTIQC } from './modules/multiqc'
 include { VERSE } from './modules/verse'
-//include { CONCAT } from './modules/concat'
+include { CONCAT } from './modules/concat'
 
 workflow {
 
@@ -37,11 +37,7 @@ workflow {
     VERSE.out.counts.collect()
     | set {concat_ch}
 
-    concat_ch.view()
-
-    //CONCAT(concat_ch)*/
-    
-
+    CONCAT(concat_ch)
     
 
 }
