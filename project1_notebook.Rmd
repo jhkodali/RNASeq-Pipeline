@@ -1,0 +1,172 @@
+---
+title: "BF528 Project 1"
+author: "Jahnavi Kodali"
+date: "2025-03-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(DESeq2)
+library(RColorBrewer)
+library(pheatmap)
+library(fgsea)
+```
+
+**QC Metrics for Full Data**  
+
+STAR alignment shows that all the samples had an alignment greater than 95%, and 90% of each sample is uniquely mapped which indicates good alignment. The GC content of the reads are about the same, around 48-49% GC. FastQC results show high sequence quality, similar normal distribution of GC content, and very low percentage of over-represented sequences (1% of reads). However, there does seem to be an unusual level of sequence duplication. Sequence duplication means that some reads are repeated many times. This could indicate problems during library preparation (over-amplification) or these genes are possibly highly expressed. In this case, it could be that the size of the original sequences were small. Overall, the sequencence quality is good.
+
+**Filtering**  
+The counts contains 63,241 genes and 8 samples. The counts were filtered to retain genes with at least 4 non-zero samples out of 6 total samples. This left 32,090 genes. 
+```{r filtering, echo=TRUE}
+counts <- read_csv("results/counts.csv")
+
+filtered_counts <- counts[rowSums(counts[-1]!=0)>=3,]
+filtered_counts
+```
+Effects of the filtering are shown in the table below:
+
+```{r filter table, echo=FALSE}
+num_samples <- ncol(counts) - 1
+total_num_genes <- nrow(counts)
+filter_num_genes <- nrow(filtered_counts)
+percent_pass <- (filter_num_genes / total_num_genes) * 100
+not_pass_genes <- total_num_genes - filter_num_genes
+percent_not_pass <- (not_pass_genes / total_num_genes) * 100
+
+sum_counts_table <- tibble(
+  Measure = c("Number of Samples", 
+              "Total Number of Genes",
+              "Number of genes passing filter",
+              "% of genes passing filter",
+              "Number of genes not passing",
+              "% of genes not passing"
+  ),
+  Value = c(num_samples,
+            total_num_genes,
+            filter_num_genes,
+            paste0(percent_pass, "%"),
+            not_pass_genes,
+            paste0(percent_not_pass, "%"))
+)
+print(sum_counts_table)
+```
+
+**Differential Expression Analysis**  
+
+```{r echo=TRUE}
+# counts matrix without gene ids
+counts_mat <- as.matrix(filtered_counts[-1])
+row.names(counts_mat) <- filtered_counts$gene
+
+# create a sample matrix from sample names
+sample_info <- tibble(
+  sample_name=colnames(filtered_counts[-1])) %>%
+  # separating name into parts by '_'
+  separate(sample_name, c("condition", "replicate"), sep = "_", remove = FALSE)
+
+```
+
+```{r printing sample_info, echo=FALSE}
+sample_info
+```
+
+
+```{r deseq}
+dds <- DESeqDataSetFromMatrix(
+  countData = counts_mat,
+  colData = sample_info,
+  design = ~ condition
+)
+dds <- DESeq(dds)
+resultsNames(dds)
+
+res <- results(dds, name="condition_exp_vs_control")
+```
+
+**Top 10 significant genes ranked by padj**
+
+```{r}
+gtf <- read_delim("results/parsed_gtf.txt")
+
+exp_vs_control_de <- as_tibble(res) %>%
+  mutate(gene = rownames(res)) %>%
+  relocate(gene) %>%
+  arrange(pvalue) %>%
+  left_join(gtf, by = c("gene" = "Ensembl_Gene_ID")) %>%
+  relocate("symbol" = "Gene_Name", .after = "gene")
+  
+head(exp_vs_control_de, 10)
+```
+At a padj threshold of 0.5, 1,153 genes are significant.  
+```{r}
+sign <- filter(exp_vs_control_de, padj < 0.05)
+nrow(sign)
+```
+
+
+```{r include=FALSE}
+mutate(
+  exp_vs_control_de,
+  `-log10(adjusted p)`=-log10(padj),
+  `FDR<0.05`=padj<0.05
+  ) %>%
+  ggplot(aes(x=log2FoldChange,y=`-log10(adjusted p)`,color=`FDR<0.05`)) +
+  geom_point() 
+```
+
+
+```{r include=FALSE}
+# removing decimals from list of genes to upload into DAVID
+gene_list <- list(sign$gene)
+gene_list_no_decimal <- lapply(gene_list, function(gene_vector) {
+  sub("\\.\\d+$", "", gene_vector)
+})
+writeLines(unlist(gene_list_no_decimal), "genes.txt")
+```
+
+187 functional clusters were identified by DAVID. Of these 187 clusters, 109 clusters had a low enrichment score of less than 1.  The functional annotation clustering results showed high enrichment based on significance and number of genes (17.2 enrichment score) in genes related to glycoproteins and other genes involved in protein structure/folding. The results also showed high enrichment scores (7.45 and 8.97) for cellular components such as extracellular space and membrane.
+
+
+**RNAseq Quality Control Plots**  
+
+PCA Plot:
+
+```{r}
+# normalization
+# using rlog for smaller sample size
+rld <- rlog(dds)
+
+# PCA
+plotPCA(rld, intgroup=c("condition", "replicate"))
+
+```
+The PCA plot shows that PC1 explains about 86% of the variance and PC2 explains about 10% of the variance of the dataset. Together, these two PCs explain 96% of the variance in the dataset. The samples in the control group show a distinct clustering together. However, one of the samples (exp:rep3) in the experiment group is significantly farther away from the other two samples in the experiment group. It could be that this sample replicate had some sort of library preparation error as the other two replicates are quite close together. Another reason for the discrepancy could be due to some sort of biological explanation. However, it seems more likely to be due to an error considering 2 of 3 replicates were clustered together.
+
+Sample-to-sample distance heat map:
+
+```{r echo=FALSE}
+# heatmap of the sample-to-sample distances
+sampleDists <- dist(t(assay(rld)))
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(rld$condition, rld$replicate, sep="-")
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors)
+```
+
+The heat map of the sample to sample distances shows that the control replicates are quite close in distance and therefore similar with replicate 2 and 3 tighter together than to replicate 1. Interestingly, the experiment replicate 3 is much closer to the control samples than with the other experiment replicates. Experiment replicate 3 is shown to be clustered with the control samples compared to experiment replicates 1 and 2. The heatmap also shows that the experiment replicates 1 and 2 have high dissimilarity with the control samples.
+
+**FGSEA analysis**
+TO-DO
+
+
+
