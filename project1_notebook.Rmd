@@ -120,7 +120,7 @@ gene_list <- list(sign$gene)
 gene_list_no_decimal <- lapply(gene_list, function(gene_vector) {
   sub("\\.\\d+$", "", gene_vector)
 })
-writeLines(unlist(gene_list_no_decimal), "genes.txt")
+writeLines(unlist(gene_list_no_decimal), "refs/genes.txt")
 ```
 
 187 functional clusters were identified by DAVID. Of these 187 clusters, 109 clusters had a low enrichment score of less than 1.  The functional annotation clustering results showed high enrichment based on significance and number of genes (17.2 enrichment score) in genes related to glycoproteins and other genes involved in protein structure/folding. The results also showed high enrichment scores (7.45 and 8.97) for cellular components such as extracellular space and membrane.
@@ -182,7 +182,7 @@ tail(ranked_vector)
 ```
 
 ```{r}
-pathways <- fgsea::gmtPathways("c2.cp.v2024.1.Hs.symbols.gmt")
+pathways <- fgsea::gmtPathways("refs/c2.cp.v2024.1.Hs.symbols.gmt")
     
 
  fgsea_res <- fgsea(
