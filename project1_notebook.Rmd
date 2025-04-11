@@ -14,14 +14,16 @@ library(tidyverse)
 library(DESeq2)
 library(RColorBrewer)
 library(pheatmap)
+library(ggplot2)
 library(fgsea)
+library(ggrepel)
 ```
 
-**QC Metrics for Full Data**  
+## QC Metrics for Full Data
 
 STAR alignment shows that all the samples had an alignment greater than 95%, and 90% of each sample is uniquely mapped which indicates good alignment. The GC content of the reads are about the same, around 48-49% GC. FastQC results show high sequence quality, similar normal distribution of GC content, and very low percentage of over-represented sequences (1% of reads). However, there does seem to be an unusual level of sequence duplication. Sequence duplication means that some reads are repeated many times. This could indicate problems during library preparation (over-amplification) or these genes are possibly highly expressed. In this case, it could be that the size of the original sequences were small. Overall, the sequencence quality is good.
 
-**Filtering**  
+## Filtering  
 The counts contains 63,241 genes and 8 samples. The counts were filtered to retain genes with at least 4 non-zero samples out of 6 total samples. This left 32,090 genes. 
 ```{r filtering, echo=TRUE}
 counts <- read_csv("results/counts.csv")
@@ -29,7 +31,7 @@ counts <- read_csv("results/counts.csv")
 filtered_counts <- counts[rowSums(counts[-1]!=0)>=3,]
 filtered_counts
 ```
-Effects of the filtering are shown in the table below:
+**Effects of the filtering are shown in the table below:**  
 
 ```{r filter table, echo=FALSE}
 num_samples <- ncol(counts) - 1
@@ -57,7 +59,7 @@ sum_counts_table <- tibble(
 print(sum_counts_table)
 ```
 
-**Differential Expression Analysis**  
+## Differential Expression Analysis  
 
 ```{r echo=TRUE}
 # counts matrix without gene ids
@@ -103,21 +105,12 @@ exp_vs_control_de <- as_tibble(res) %>%
   
 head(exp_vs_control_de, 10)
 ```
+
+
 At a padj threshold of 0.5, 1,153 genes are significant.  
 ```{r}
 sign <- filter(exp_vs_control_de, padj < 0.05)
 nrow(sign)
-```
-
-
-```{r include=FALSE}
-mutate(
-  exp_vs_control_de,
-  `-log10(adjusted p)`=-log10(padj),
-  `FDR<0.05`=padj<0.05
-  ) %>%
-  ggplot(aes(x=log2FoldChange,y=`-log10(adjusted p)`,color=`FDR<0.05`)) +
-  geom_point() 
 ```
 
 
@@ -133,9 +126,9 @@ writeLines(unlist(gene_list_no_decimal), "genes.txt")
 187 functional clusters were identified by DAVID. Of these 187 clusters, 109 clusters had a low enrichment score of less than 1.  The functional annotation clustering results showed high enrichment based on significance and number of genes (17.2 enrichment score) in genes related to glycoproteins and other genes involved in protein structure/folding. The results also showed high enrichment scores (7.45 and 8.97) for cellular components such as extracellular space and membrane.
 
 
-**RNAseq Quality Control Plots**  
+## RNAseq Quality Control Plots  
 
-PCA Plot:
+**PCA Plot:**
 
 ```{r}
 # normalization
@@ -146,9 +139,10 @@ rld <- rlog(dds)
 plotPCA(rld, intgroup=c("condition", "replicate"))
 
 ```
+
 The PCA plot shows that PC1 explains about 86% of the variance and PC2 explains about 10% of the variance of the dataset. Together, these two PCs explain 96% of the variance in the dataset. The samples in the control group show a distinct clustering together. However, one of the samples (exp:rep3) in the experiment group is significantly farther away from the other two samples in the experiment group. It could be that this sample replicate had some sort of library preparation error as the other two replicates are quite close together. Another reason for the discrepancy could be due to some sort of biological explanation. However, it seems more likely to be due to an error considering 2 of 3 replicates were clustered together.
 
-Sample-to-sample distance heat map:
+**Sample-to-sample distance heat map:**  
 
 ```{r echo=FALSE}
 # heatmap of the sample-to-sample distances
@@ -166,7 +160,156 @@ pheatmap(sampleDistMatrix,
 The heat map of the sample to sample distances shows that the control replicates are quite close in distance and therefore similar with replicate 2 and 3 tighter together than to replicate 1. Interestingly, the experiment replicate 3 is much closer to the control samples than with the other experiment replicates. Experiment replicate 3 is shown to be clustered with the control samples compared to experiment replicates 1 and 2. The heatmap also shows that the experiment replicates 1 and 2 have high dissimilarity with the control samples.
 
 **FGSEA analysis**
-TO-DO
+
+```{r}
+# drop rows with NA values
+ranked_vector <- exp_vs_control_de %>%
+  drop_na()
+
+# removes duplicates; keeps higher log2FC
+ranked_vector <- ranked_vector %>%
+  group_by(symbol) %>%
+  filter(log2FoldChange == max(log2FoldChange)) %>%
+  ungroup()
+
+ranked_vector <- ranked_vector %>%
+      arrange(desc(log2FoldChange)) %>%
+      dplyr::select(symbol, log2FoldChange) %>%
+      deframe()
+
+head(ranked_vector)
+tail(ranked_vector)
+```
+
+```{r}
+pathways <- fgsea::gmtPathways("c2.cp.v2024.1.Hs.symbols.gmt")
+    
+
+ fgsea_res <- fgsea(
+      pathways = pathways,
+      stats = ranked_vector,
+      minSize = 15,
+      maxSize = 500
+    )
+ 
+ fgsea_res %>% arrange(padj)
+```
+
+```{r}
+top_pathways <- function(fgsea_results, num_paths){
+    top_positive <- fgsea_results %>%
+      filter(NES > 0) %>%
+      arrange(desc(NES)) %>%
+      slice_head(n = num_paths)  # Select top 10 positive NES
+  
+    top_negative <- fgsea_results %>%
+      filter(NES < 0) %>%
+      arrange(NES) %>%  # Arrange in ascending order for negative NES
+      slice_head(n = num_paths)  # Select top 10 negative NES
+  
+    # Combine the results into one data frame
+    top_pathways <- bind_rows(top_positive, top_negative)
+  
+    # Create a bar chart for top pathways by NES
+    plot <- ggplot(top_pathways, aes(x = reorder(pathway, NES), y = NES, fill = NES > 0)) +
+      geom_bar(stat = "identity") +
+      scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "blue"), labels = c("TRUE" = "Positive NES", "FALSE" = "Negative NES")) +
+      labs(title = "FGSEA results",
+         x = NULL,
+         y = "NES",
+         fill = "NES Sign") +
+      coord_flip() + 
+      scale_y_continuous(limits = c(-3, 3)) +
+      theme_minimal()
+    return(plot)
+}
+```
+
+```{r}
+top_pathways(fgsea_res, 5)
+```
+
+The FGSEA shows upregulation of genes involved in the p53 downstream pathway which is a tumor suppressor pathway involved in preventing the proliferation of cancerous cells. Similarly, there is upregulation of TAP63 pathway genes which are involved in similar tumor suppression activities. There is also upregulation of genes involved in regulating intracellular signals in response to the extracellular matrix and the development of collagen. Interestingly, there is in an upregulation of heart development genes as well. We also see downregulation of neuronal relevant genes as well as genes involved in insulin secretion from beta cells and beta cell development. This may indicate that the experimental samples are in a state of stress and cells are intiating tumor-suppressing mechanisms.
 
 
+## Replicate figure 3C and 3F from Chandra et al.
 
+**Figure 3C**
+
+```{r}
+mutate(
+  exp_vs_control_de,
+  `-log10(adjusted p)`=-log10(padj),
+  `FDR<0.05`=padj<0.05
+  ) %>%
+  ggplot(aes(x=log2FoldChange,y=`-log10(adjusted p)`,color=`FDR<0.05`)) +
+  geom_point() +
+  geom_text_repel(data = . %>% filter(symbol %in% c("KRAS", "LAMB2", "SPP1", "PAK3", "ELMO1", "NEUROG3", "GAB2", "DUSP6", "APOE", "SPRY2")), 
+                  aes(label = symbol),
+                  color = "black", 
+                  box.padding = 0.5,
+                  nudge_y      = 50,
+                  direction    = "x",
+                  max.overlaps = Inf)
+```
+
+Zoomed in view:
+
+```{r}
+mutate(
+  exp_vs_control_de,
+  `-log10(adjusted p)`=-log10(padj),
+  `FDR<0.05`=padj<0.05
+  ) %>%
+  ggplot(aes(x=log2FoldChange,y=`-log10(adjusted p)`,color=`FDR<0.05`)) +
+  geom_point() +
+  geom_text_repel(
+    data = . %>% filter(symbol %in% c("KRAS", "LAMB2", "SPP1", "DUSP6", "APOE", "SPRY2", "PGF")),
+    aes(label = symbol),
+    color = "black",
+    nudge_x = 7,
+    direction = "y",
+    max.overlaps = Inf
+    ) +
+  geom_text_repel(
+    data = . %>% filter(symbol %in% c("PAK3", "ELMO1", "NEUROG3", "GAB2", "INSM1", "ONECUT1")),
+    aes(label = symbol),
+    color = "black",
+    nudge_x = -7,
+    direction = "y",
+    max.overlaps = Inf 
+  ) +
+    ylim(0,20)
+
+```
+
+
+```{r}
+upregulated_count <- exp_vs_control_de %>%
+  filter(log2FoldChange > 0 & padj < 0.05) %>%
+  nrow()
+
+downregulated_count <- exp_vs_control_de %>%
+  filter(log2FoldChange < 0 & padj < 0.05) %>%
+  nrow()
+
+upregulated_count
+downregulated_count
+```
+
+## Methods
+
+**Source of Data:**  
+Bulk RNA-seq data corresponding to the WT and KO S5 In vitro hPSCs differentiated into pancreatic lineage was sourced from the BF528 Project Materials. The data was originally from the following paper: Chandra, V., Ibrahim, H., Halliez, C. et al. The type 1 diabetes gene TYK2 regulates β-cell development and its responses to interferon-α. Nat Commun 13, 6363 (2022). https://doi.org/10.1038/s41467-022-34069-z.
+
+**Quality Control:**  
+Initial quality control was performed using FastQC [Andrews S. (2010). FastQC: a quality control tool for high throughput sequence data. Available online at: http://www.bioinformatics.babraham.ac.uk/projects/fastqc].  
+
+**Alignment and Counting:**  
+Reads were aligned to the Gencode human primary assembly genome (GRCh38, release 47) using STAR v2.7.11b [Spliced Transcripts Alignment to a Reference. Alexander Dobin, 2009-2024 https://www.ncbi.nlm.nih.gov/pubmed/23104886] with default parameters. A report summarizing the statistics was generated by MultiQC v1.28 [MultiQC: Summarize analysis results for multiple tools and samples in a single report.Philip Ewels, Måns Magnusson, Sverker Lundin and Max Käller. Bioinformatics (2016). doi: 10.1093/bioinformatics/btw354. PMID: 27312411]. Gene counts were generated from alignments using VERSE v0.1.5 with default parameters [ VERSE: a versatile and efficient RNA-Seq read counting tool. Qin Zhu, Stephen A Fisher, Jamie Shallcross, Junhyong Kim. bioRxiv 053306; doi: https://doi.org/10.1101/053306] and the gencode v45 primary assembly GTF. 
+
+**Filtering and Differential Expression:**  
+Counts were combined and filtered to remove genes that did not have a non-zero count in 4 of the 6 samples. Normalization and differential expression analysis was performed with DESeq2 v1.42.1 [Love MI, Huber W, Anders S (2014). “Moderated estimation of fold change and dispersion for RNA-seq data with DESeq2.” Genome Biology, 15, 550. doi:10.1186/s13059-014-0550-8.] using default parameters comparing the WT and KO conditions.
+
+**Differences in Methods from Paper**
+The paper filtered the raw data to remove adapter sequences, ambiguous bases, and bases with a Phred score <25 using Cutadapt v2.6. They also excluded read pairs that were <25 base pairs after trimming. The paper also calculated the false discovery rate and used FDR<0.01 to determine differentially expressed genes. The paper also used ClusterProfiler to analyze the DEGs for enrichment instead of FGSEA.
